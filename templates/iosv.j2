@@ -107,6 +107,7 @@ interface {{ intf.name }}
 {% elif intf.mode and intf.mode.value == "access" %}
  switchport access vlan {{ intf.untagged_vlan.vid }}
  switchport mode access
+ no shutdown
  media-type rj45
  negotiation auto
 
