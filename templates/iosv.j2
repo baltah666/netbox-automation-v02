@@ -89,7 +89,6 @@ interface {{ intf.name }}
 {% if intf.description %}
  description {{ intf.description }}
 {% endif %}
-
 {% if intf.name.startswith('vlan.') %}
 {% for ip in intf_ips %}
  ip address {{ ip.address.split('/')[0] }} {{ ip.address | ansible.utils.ipaddr('netmask') }}
@@ -103,14 +102,12 @@ interface {{ intf.name }}
  negotiation auto
  no cdp enable
  spanning-tree portfast edge
-
 {% elif intf.mode and intf.mode.value == "access" %}
  switchport access vlan {{ intf.untagged_vlan.vid }}
  switchport mode access
  no shutdown
  media-type rj45
  negotiation auto
-
 {% elif intf.mode and intf.mode.value in ["tagged", "tagged-all"] %}
  switchport trunk encapsulation dot1q
  switchport mode trunk
@@ -118,7 +115,6 @@ interface {{ intf.name }}
  media-type rj45
  negotiation auto
  spanning-tree guard loop
-
 {% else %}
  shutdown
  media-type rj45
