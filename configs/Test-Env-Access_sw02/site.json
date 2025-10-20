@@ -3,14 +3,14 @@
     "api_version": "4.4",
     "changed": false,
     "connection": "close",
-    "content": "{\"count\":1,\"next\":null,\"previous\":null,\"results\":[{\"id\":12,\"url\":\"http://192.168.1.254:8000/api/dcim/sites/12/\",\"display_url\":\"http://192.168.1.254:8000/dcim/sites/12/\",\"display\":\"lab_test_env\",\"name\":\"lab_test_env\",\"slug\":\"lab_test_env\",\"status\":{\"value\":\"active\",\"label\":\"Active\"},\"region\":{\"id\":26,\"url\":\"http://192.168.1.254:8000/api/dcim/regions/26/\",\"display\":\"Europ-sweden\",\"name\":\"Europ-sweden\",\"slug\":\"europ-sweden\",\"description\":\"\",\"site_count\":0,\"_depth\":0},\"group\":null,\"tenant\":{\"id\":5,\"url\":\"http://192.168.1.254:8000/api/tenancy/tenants/5/\",\"display\":\"Consulting\",\"name\":\"Consulting\",\"slug\":\"consulting\",\"description\":\"\"},\"facility\":\"\",\"time_zone\":null,\"description\":\"\",\"physical_address\":\"\",\"shipping_address\":\"\",\"latitude\":null,\"longitude\":null,\"comments\":\"\",\"asns\":[],\"tags\":[],\"custom_fields\":{},\"created\":\"2025-09-16T12:08:17.513804Z\",\"last_updated\":\"2025-09-16T12:08:17.513820Z\",\"circuit_count\":0,\"device_count\":8,\"prefix_count\":0,\"rack_count\":1,\"virtualmachine_count\":0,\"vlan_count\":5}]}",
+    "content": "{\"count\":1,\"next\":null,\"previous\":null,\"results\":[{\"id\":12,\"url\":\"http://192.168.1.254:8000/api/dcim/sites/12/\",\"display_url\":\"http://192.168.1.254:8000/dcim/sites/12/\",\"display\":\"lab_test_env\",\"name\":\"lab_test_env\",\"slug\":\"lab_test_env\",\"status\":{\"value\":\"active\",\"label\":\"Active\"},\"region\":{\"id\":26,\"url\":\"http://192.168.1.254:8000/api/dcim/regions/26/\",\"display\":\"Europ-sweden\",\"name\":\"Europ-sweden\",\"slug\":\"europ-sweden\",\"description\":\"\",\"site_count\":0,\"_depth\":0},\"group\":null,\"tenant\":{\"id\":5,\"url\":\"http://192.168.1.254:8000/api/tenancy/tenants/5/\",\"display\":\"Consulting\",\"name\":\"Consulting\",\"slug\":\"consulting\",\"description\":\"\"},\"facility\":\"\",\"time_zone\":null,\"description\":\"\",\"physical_address\":\"\",\"shipping_address\":\"\",\"latitude\":null,\"longitude\":null,\"comments\":\"\",\"asns\":[],\"tags\":[],\"custom_fields\":{},\"created\":\"2025-09-16T12:08:17.513804Z\",\"last_updated\":\"2025-09-16T12:08:17.513820Z\",\"circuit_count\":0,\"device_count\":9,\"prefix_count\":0,\"rack_count\":1,\"virtualmachine_count\":0,\"vlan_count\":5}]}",
     "content_language": "en",
     "content_length": "1009",
     "content_type": "application/json",
     "cookies": {},
     "cookies_string": "",
     "cross_origin_opener_policy": "same-origin",
-    "date": "Mon, 20 Oct 2025 07:01:39 GMT",
+    "date": "Mon, 20 Oct 2025 07:39:46 GMT",
     "elapsed": 0,
     "failed": false,
     "json": {
@@ -25,7 +25,7 @@
                 "created": "2025-09-16T12:08:17.513804Z",
                 "custom_fields": {},
                 "description": "",
-                "device_count": 8,
+                "device_count": 9,
                 "display": "lab_test_env",
                 "display_url": "http://192.168.1.254:8000/dcim/sites/12/",
                 "facility": "",
@@ -79,5 +79,5 @@
     "vary": "HX-Request, Accept-Language, Cookie, origin",
     "x_content_type_options": "nosniff",
     "x_frame_options": "SAMEORIGIN",
-    "x_request_id": "186212b5-00da-4446-a932-459032dd9ae5"
+    "x_request_id": "e9342ef6-d95c-48d8-a117-e8adf9ad5307"
 }
