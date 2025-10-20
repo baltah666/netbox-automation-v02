@@ -117,8 +117,7 @@ interface {{ intf.name }}
  spanning-tree guard loop
 {% else %}
  shutdown
- media-type rj45
- negotiation auto
+ default interface {{ intf.name }}
 {% endif %}
 {% endif %}
 !
