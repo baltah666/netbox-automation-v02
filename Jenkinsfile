@@ -11,7 +11,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/baltah666/netbox-automation.git',
+                    url: 'https://github.com/baltah666/netbox-automation-v2.git',
                     credentialsId: 'github-cred'
             }
         }
@@ -52,7 +52,7 @@ pipeline {
                     git commit -m "Automated update from Jenkins build ${BUILD_NUMBER}"
 
                     # Push using the injected token
-                    git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation.git main
+                    git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v2.git main
                 else
                     echo "No changes to commit."
                 fi
