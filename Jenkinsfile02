@@ -35,7 +35,7 @@ pipeline {
                 script {
                     // 1️⃣ Get device list from NetBox
                     def raw = sh(
-                        script: ". venv/bin/activate && python3 get_devices.py",
+                        script: ". venv/bin/activate && python3 get_devices.py --quiet",
                         returnStdout: true
                     ).trim()
                     def devices = readJSON text: raw
