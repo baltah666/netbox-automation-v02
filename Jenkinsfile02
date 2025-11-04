@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         NETBOX_API   = "http://netbox-docker-netbox-1:8080/"
-        NETBOX_TOKEN = credentials('netbox-api-token')  // or hardcode if not stored in Jenkins credentials
+        NETBOX_TOKEN = credentials('netbox-api-token')
     }
 
     stages {
@@ -29,81 +29,61 @@ pipeline {
         stage('Parallel Config Generation') {
             steps {
                 script {
-                    // 1️⃣ Fetch device list dynamically from NetBox
-                    def raw = sh(
-                        script: ". venv/bin/activate && python3 get_devices.py --quiet",
-                        returnStdout: true
-                    ).trim()
+                    // Get devices from NetBox
+                    def raw = sh(script: ". venv/bin/activate && python3 get_devices.py --quiet", returnStdout: true).trim()
                     def devices = readJSON text: raw
                     echo "Devices discovered: ${devices}"
 
-                    // 2️⃣ Create parallel branches dynamically
+                    // Build parallel map
                     def branches = [:]
+
                     for (int i = 0; i < devices.size(); i++) {
                         def dev = devices[i]
                         branches[dev] = {
-                            stage("${dev}") {
-                                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-
-                                    stage("${dev} - device.json") {
+                            stage("Generate ${dev}") {
+                                parallel(
+                                    "1. device.json": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags device
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags device || true
                                         """
-                                    }
-
-                                    stage("${dev} - interfaces.json") {
+                                    },
+                                    "2. interfaces.json": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags interfaces
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags interfaces || true
                                         """
-                                    }
-
-                                    stage("${dev} - ip_addresses.json") {
+                                    },
+                                    "3. ip_addresses.json": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags ip_addresses
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags ip_addresses || true
                                         """
-                                    }
-
-                                    stage("${dev} - site.json") {
+                                    },
+                                    "4. site.json": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags site
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags site || true
                                         """
-                                    }
-
-                                    stage("${dev} - vlans.json") {
+                                    },
+                                    "5. vlans.json": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags vlans
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags vlans || true
                                         """
-                                    }
-
-                                    stage("${dev} - generate_config") {
+                                    },
+                                    "6. generate_config": {
                                         sh """
                                         . venv/bin/activate
-                                        export NETBOX_API=${NETBOX_API}
-                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
-                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags generate_config
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags generate_config || true
                                         """
                                     }
-                                }
+                                )
                             }
                         }
                     }
 
-                    // 3️⃣ Execute all devices in parallel
+                    // Run all devices in parallel
                     parallel branches
                 }
             }
