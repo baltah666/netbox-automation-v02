@@ -2,30 +2,26 @@ pipeline {
     agent any
 
     environment {
-        NETBOX_TOKEN = '1479d3740f85e8ab5900b72d31b89cb81fdc2a06'
-        NETBOX_API   = 'http://netbox-docker-netbox-1:8080/api/'
-        GITHUB_TOKEN = credentials('github-cred-token')
+        NETBOX_API   = "http://netbox-docker-netbox-1:8080/"
+        NETBOX_TOKEN = credentials('netbox-api-token')  // or hardcode if not stored in Jenkins credentials
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/baltah666/netbox-automation-v02.git',
-                    credentialsId: 'github-cred'
+                git branch: 'main', url: 'https://github.com/baltah666/netbox-automation-v02.git', credentialsId: 'github-cred'
             }
         }
 
         stage('Setup Environment') {
             steps {
                 sh '''
-                python3 -m venv venv
-                . venv/bin/activate
-                pip install --upgrade pip
-                if [ -f requirements.txt ]; then
-                    pip install -r requirements.txt
-                fi
-                ansible-galaxy collection install netbox.netbox || true
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+                    ansible-galaxy collection install netbox.netbox
                 '''
             }
         }
@@ -33,58 +29,107 @@ pipeline {
         stage('Parallel Config Generation') {
             steps {
                 script {
-                    // 1️⃣ Get device list from NetBox
+                    // 1️⃣ Fetch device list dynamically from NetBox
                     def raw = sh(
                         script: ". venv/bin/activate && python3 get_devices.py --quiet",
                         returnStdout: true
                     ).trim()
                     def devices = readJSON text: raw
-
                     echo "Devices discovered: ${devices}"
 
-                    // 2️⃣ Build parallel branches dynamically
+                    // 2️⃣ Create parallel branches dynamically
                     def branches = [:]
                     for (int i = 0; i < devices.size(); i++) {
                         def dev = devices[i]
                         branches[dev] = {
-                            stage("Generate ${dev}") {
-                                sh """
-                                . venv/bin/activate
-                                export NETBOX_API="http://netbox-docker-netbox-1:8080/"
-                                export NETBOX_TOKEN="${NETBOX_TOKEN}"
-                                ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} || tru
-                                """
+                            stage("${dev}") {
+                                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+
+                                    stage("${dev} - device.json") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags device
+                                        """
+                                    }
+
+                                    stage("${dev} - interfaces.json") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags interfaces
+                                        """
+                                    }
+
+                                    stage("${dev} - ip_addresses.json") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags ip_addresses
+                                        """
+                                    }
+
+                                    stage("${dev} - site.json") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags site
+                                        """
+                                    }
+
+                                    stage("${dev} - vlans.json") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags vlans
+                                        """
+                                    }
+
+                                    stage("${dev} - generate_config") {
+                                        sh """
+                                        . venv/bin/activate
+                                        export NETBOX_API=${NETBOX_API}
+                                        export NETBOX_TOKEN=${NETBOX_TOKEN}
+                                        ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags generate_config
+                                        """
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // 3️⃣ Execute in parallel
+                    // 3️⃣ Execute all devices in parallel
                     parallel branches
                 }
             }
         }
 
         stage('Git Push Changes') {
+            when {
+                expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+            }
             steps {
-                sh '''
-                git config user.name "Abdulilah Baltah"
-                git config user.email "baltah666@gmail.com"
-
-                if [ -n "$(git status --porcelain)" ]; then
-                    git add .
-                    git commit -m "Automated update from Jenkins build ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
-                else
-                    echo "No changes to commit."
-                fi
-                '''
+                withCredentials([usernamePassword(credentialsId: 'github-cred-token', usernameVariable: 'USER', passwordVariable: 'TOKEN')]) {
+                    sh '''
+                        git config --global user.email "jenkins@local"
+                        git config --global user.name "Jenkins"
+                        git add configs/ || true
+                        git commit -m "Auto-generated configs from Jenkins pipeline" || true
+                        git push https://${USER}:${TOKEN}@github.com/baltah666/netbox-automation-v02.git main || true
+                    '''
+                }
             }
         }
     }
 
     post {
         always {
-            echo 'Pipeline finished.'
+            echo "Pipeline finished."
         }
     }
 }
