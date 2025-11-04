@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    environment {
+        NETBOX_TOKEN = '1479d3740f85e8ab5900b72d31b89cb81fdc2a06'
+        NETBOX_API   = 'http://192.168.1.254:8000/api/'
+        GITHUB_TOKEN = credentials('github-cred-token')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/baltah666/netbox-automation-v02.git',
+                    credentialsId: 'github-cred'
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                sh '''
+                python3 -m venv venv
+                . venv/bin/activate
+                pip install --upgrade pip
+                if [ -f requirements.txt ]; then
+                    pip install -r requirements.txt
+                fi
+                ansible-galaxy collection install netbox.netbox || true
+                '''
+            }
+        }
+
+        stage('Parallel Config Generation') {
+            steps {
+                script {
+                    // 1️⃣ Get device list from NetBox
+                    def raw = sh(
+                        script: ". venv/bin/activate && python3 get_devices.py",
+                        returnStdout: true
+                    ).trim()
+                    def devices = readJSON text: raw
+
+                    echo "Devices discovered: ${devices}"
+
+                    // 2️⃣ Build parallel branches dynamically
+                    def branches = [:]
+                    for (int i = 0; i < devices.size(); i++) {
+                        def dev = devices[i]
+                        branches[dev] = {
+                            stage("Generate ${dev}") {
+                                sh """
+                                . venv/bin/activate
+                                export NETBOX_API="http://netbox-docker-netbox-1:8080/"
+                                export NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev}
+                                """
+                            }
+                        }
+                    }
+
+                    // 3️⃣ Execute in parallel
+                    parallel branches
+                }
+            }
+        }
+
+        stage('Git Push Changes') {
+            steps {
+                sh '''
+                git config user.name "Abdulilah Baltah"
+                git config user.email "baltah666@gmail.com"
+
+                if [ -n "$(git status --porcelain)" ]; then
+                    git add .
+                    git commit -m "Automated update from Jenkins build ${BUILD_NUMBER}"
+                    git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
+                else
+                    echo "No changes to commit."
+                fi
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished.'
+        }
+    }
+}
