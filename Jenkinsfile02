@@ -1,15 +1,18 @@
 pipeline {
     agent any
+
     environment {
-        NETBOX_API   = "http://netbox-docker-netbox-1:8080/"
-        NETBOX_TOKEN = credentials('netbox-api-token')
+        NETBOX_API   = credentials('netbox-api-url')    // store your API URL if you want it secret (or hardcode)
+        NETBOX_TOKEN = credentials('netbox-token')       // your NetBox API token
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/baltah666/netbox-automation-v02.git', credentialsId: 'github-cred'
+                git branch: 'main',
+                    url: 'https://github.com/baltah666/netbox-automation-v02.git',
+                    credentialsId: 'github-cred'
             }
         }
 
@@ -28,101 +31,108 @@ pipeline {
         stage('Get Devices List') {
             steps {
                 script {
-                    def raw = sh(script: ". venv/bin/activate && python3 get_devices.py --quiet", returnStdout: true).trim()
-                    writeFile file: 'devices.json', text: raw
+                    echo "🔍 Fetching device list from NetBox..."
+                    def devicesJSON = sh(
+                        script: '''
+                            . venv/bin/activate
+                            export NETBOX_API="$NETBOX_API"
+                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                            python3 get_devices.py --quiet
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    // Parse JSON to list
+                    def devices = readJSON text: devicesJSON
+                    echo "✅ Devices fetched: ${devices}"
+
+                    // Save device list for next stages
+                    env.DEVICE_LIST = devicesJSON
                 }
             }
         }
 
-        stage('1. device.json') {
+        stage('Parallel Config Generation') {
             steps {
                 script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags device || true"""
-                        }]
-                    }
-                }
-            }
-        }
+                    def devices = readJSON text: env.DEVICE_LIST
+                    def branches = [:]
 
-        stage('2. interfaces.json') {
-            steps {
-                script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags interfaces || true"""
-                        }]
-                    }
-                }
-            }
-        }
+                    for (dev in devices) {
+                        def deviceName = dev // isolate variable per loop iteration
 
-        stage('3. ip_addresses.json') {
-            steps {
-                script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags ip_addresses || true"""
-                        }]
+                        branches[deviceName] = {
+                            stage("${deviceName}") {
+                                parallel(
+                                    "1. device.json": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags device
+                                        """
+                                    },
+                                    "2. interfaces.json": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
+                                        """
+                                    },
+                                    "3. ip_addresses.json": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags ip_addresses
+                                        """
+                                    },
+                                    "4. site.json": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags site
+                                        """
+                                    },
+                                    "5. vlans.json": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags vlans
+                                        """
+                                    },
+                                    "6. generate_config": {
+                                        sh """
+                                            . venv/bin/activate
+                                            export NETBOX_API="$NETBOX_API"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags generate_config
+                                        """
+                                    }
+                                )
+                            }
+                        }
                     }
-                }
-            }
-        }
 
-        stage('4. site.json') {
-            steps {
-                script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags site || true"""
-                        }]
-                    }
-                }
-            }
-        }
-
-        stage('5. vlans.json') {
-            steps {
-                script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags vlans || true"""
-                        }]
-                    }
-                }
-            }
-        }
-
-        stage('6. generate_config') {
-            steps {
-                script {
-                    def devices = readJSON file: 'devices.json'
-                    parallel devices.collectEntries { dev ->
-                        ["${dev}": {
-                            sh """. venv/bin/activate && ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} --tags generate_config || true"""
-                        }]
-                    }
+                    // Execute all device branches in parallel
+                    parallel branches
                 }
             }
         }
 
         stage('Git Push Changes') {
+            when { expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' } }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'github-cred-token', usernameVariable: 'USER', passwordVariable: 'TOKEN')]) {
-                    sh '''
-                        git config --global user.email "jenkins@local"
-                        git config --global user.name "Jenkins"
-                        git add configs/ || true
-                        git commit -m "Auto-generated configs from Jenkins pipeline" || true
-                        git push https://${USER}:${TOKEN}@github.com/baltah666/netbox-automation-v02.git main || true
-                    '''
-                }
+                sh '''
+                    git config user.email "jenkins@localhost"
+                    git config user.name "Jenkins"
+                    git add configs/
+                    git commit -m "Auto-generated configs from Jenkins pipeline" || echo "No changes to commit"
+                    git push origin main || echo "No changes to push"
+                '''
             }
         }
     }
@@ -130,6 +140,12 @@ pipeline {
     post {
         always {
             echo "Pipeline finished."
+        }
+        failure {
+            echo "❌ Pipeline failed — check logs."
+        }
+        success {
+            echo "✅ All device configurations generated successfully!"
         }
     }
 }
