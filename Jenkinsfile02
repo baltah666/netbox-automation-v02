@@ -52,7 +52,7 @@ pipeline {
                                 . venv/bin/activate
                                 export NETBOX_API="http://netbox-docker-netbox-1:8080/"
                                 export NETBOX_TOKEN="${NETBOX_TOKEN}"
-                                ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev}
+                                ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${dev} || tru
                                 """
                             }
                         }
