@@ -6,13 +6,26 @@ API = os.getenv("NETBOX_API", "http://netbox-docker-netbox-1:8080").rstrip("/")
 TOKEN = os.getenv("NETBOX_TOKEN", "").strip()
 quiet = "--quiet" in sys.argv  # suppress debug output for Jenkins
 
+# --- Role filtering (optional) ---
+role_filter = None
+if "--role" in sys.argv:
+    try:
+        role_filter = sys.argv[sys.argv.index("--role") + 1]
+    except IndexError:
+        print("❌ Missing role name after --role")
+        sys.exit(1)
+
 # --- Validate environment variables ---
 if not API or not TOKEN:
     print("❌ Missing NETBOX_API or NETBOX_TOKEN environment variables.")
     sys.exit(1)
 
 # --- Build request ---
-url = f"{API}/api/dcim/devices/?limit=0"
+params = {"limit": 0}
+if role_filter:
+    params["role"] = role_filter
+
+url = f"{API}/api/dcim/devices/"
 headers = {
     "Authorization": f"Token {TOKEN}",
     "Accept": "application/json"
@@ -20,11 +33,13 @@ headers = {
 
 if not quiet:
     print(f"🔍 Fetching from: {url}")
+    if role_filter:
+        print(f"🎯 Role filter: {role_filter}")
     print(f"🔑 Using token prefix: {TOKEN[:6]}... (truncated)")
 
 # --- Perform request ---
 try:
-    resp = requests.get(url, headers=headers, timeout=20)
+    resp = requests.get(url, headers=headers, params=params, timeout=20)
 except requests.exceptions.RequestException as e:
     print(f"❌ Connection error: {e}")
     sys.exit(1)
@@ -34,7 +49,7 @@ if resp.status_code != 200:
     print(f"❌ HTTP {resp.status_code}: {resp.text[:300]}")
     sys.exit(1)
 
-# --- Try parse JSON ---
+# --- Parse JSON ---
 try:
     data = resp.json()
 except ValueError:
