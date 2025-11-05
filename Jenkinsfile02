@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'    // store your API URL if you want it secret (or hardcode)
-        NETBOX_TOKEN = credentials('netbox-token')       // your NetBox API token
+        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'
+        NETBOX_TOKEN = credentials('netbox-token')
+        GITHUB_TOKEN = credentials('github-cred-token')   // inject GitHub PAT
     }
 
     stages {
@@ -37,18 +38,20 @@ pipeline {
                             . venv/bin/activate
                             export NETBOX_API="$NETBOX_API"
                             export NETBOX_TOKEN="$NETBOX_TOKEN"
-			    echo "NETBOX_API=$NETBOX_API"
-                            echo "NETBOX_TOKEN length: ${#NETBOX_TOKEN}"
+
+                            # redirect debug to stderr so JSON stays clean
+                            echo "NETBOX_API=$NETBOX_API" 1>&2
+                            echo "NETBOX_TOKEN length: ${#NETBOX_TOKEN}" 1>&2
+
+                            # print ONLY JSON
                             python3 get_devices.py --quiet
                         ''',
                         returnStdout: true
                     ).trim()
 
-                    // Parse JSON to list
                     def devices = readJSON text: devicesJSON
                     echo "✅ Devices fetched: ${devices}"
 
-                    // Save device list for next stages
                     env.DEVICE_LIST = devicesJSON
                 }
             }
@@ -61,7 +64,7 @@ pipeline {
                     def branches = [:]
 
                     for (dev in devices) {
-                        def deviceName = dev // isolate variable per loop iteration
+                        def deviceName = dev
 
                         branches[deviceName] = {
                             stage("${deviceName}") {
@@ -119,21 +122,26 @@ pipeline {
                         }
                     }
 
-                    // Execute all device branches in parallel
                     parallel branches
                 }
             }
         }
 
         stage('Git Push Changes') {
-            when { expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' } }
             steps {
                 sh '''
-                    git config user.email "jenkins@localhost"
-                    git config user.name "Jenkins"
-                    git add configs/
-                    git commit -m "Auto-generated configs from Jenkins pipeline" || echo "No changes to commit"
-                    git push origin main || echo "No changes to push"
+                    git config user.name "Abdulilah Baltah"
+                    git config user.email "baltah666@gmail.com"
+
+                    if [ -n "$(git status --porcelain)" ]; then
+                        git add .
+                        git commit -m "Automated update from Jenkins build ${BUILD_NUMBER}"
+
+                        # Push using the injected GitHub token
+                        git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
+                    else
+                        echo "No changes to commit."
+                    fi
                 '''
             }
         }
