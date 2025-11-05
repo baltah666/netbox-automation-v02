@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-#        NETBOX_API   = credentials('netbox-api')    // store your API URL if you want it secret (or hardcode)
         NETBOX_API   = 'http://192.168.1.254:8000/api/'    // store your API URL if you want it secret (or hardcode)
         NETBOX_TOKEN = credentials('netbox-token')       // your NetBox API token
     }
