@@ -1,5 +1,6 @@
 ---
 - name: 1 - Get Devices
+  tags: [device]
   uri:
       url: "{{ netbox_url }}api/dcim/devices/?name={{ inventory_hostname }}"
       method: GET
@@ -10,6 +11,7 @@
   register: device
 
 - name: 2 - Get Interfaces
+  tags: [interfaces]
   uri:
       url: "{{ netbox_url }}api/dcim/interfaces/?device={{ inventory_hostname }}&limit=0"
       method: GET
@@ -20,6 +22,7 @@
   register: interfaces
 
 - name: 3 - Get IP Addresses
+  tags: [ip_addresses]
   uri:
       url: "{{ netbox_url }}api/ipam/ip-addresses/?device={{ inventory_hostname }}"
       method: GET
@@ -30,6 +33,7 @@
   register: ip_addresses
 
 - name: 4 - Get Site Details
+  tags: [site]
   uri:
       url: "{{ netbox_url }}api/dcim/sites/?name={{ device.json.results[0]['site']['name'] }}"
       method: GET
@@ -40,6 +44,7 @@
   register: site
 
 - name: 5 - Get List of VLANs for Site {{ device.json.results[0]['site']['name'] }}
+  tags: [vlans]
   uri:
       url: "{{ netbox_url }}api/ipam/vlans/?site_id={{ site.json.results[0]['id'] }}"
       method: GET
@@ -50,22 +55,26 @@
   register: vlans
 
 - name: 6 - Create temporary folder for Device Configs
+  tags: [generate_config]
   file:
     dest: "{{ configs_directory }}/{{ inventory_hostname }}"
     state: directory
 
 - name: 7 - Create configuration files
+  tags: [generate_config]
   template:
       src: "templates/{{ platforms[0] }}.j2"
       dest: "{{ configs_directory }}/{{ inventory_hostname }}/{{ inventory_hostname }}.conf"
 
 - name: JUNOS BONUS PLAY!! - Create Junos config using Set Commands
+  tags: [generate_config]
   template:
       src: "templates/{{ platforms[0] }}-set.j2"
       dest: "{{ configs_directory }}/{{ inventory_hostname }}/{{ inventory_hostname }}.set"
   when: platforms[0] == 'juniper-junos'
 
 - name: 8 - Save all registered variables to JSON files
+  tags: [generate_config, save]
   copy:
     content: "{{ lookup('ansible.builtin.vars', item) | to_nice_json }}"
     dest: "{{ configs_directory }}/{{ inventory_hostname }}/{{ item }}.json"
