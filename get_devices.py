@@ -11,6 +11,8 @@ role_filter = None
 if "--role" in sys.argv:
     try:
         role_filter = sys.argv[sys.argv.index("--role") + 1]
+        # Convert to NetBox slug format: lowercase + replace spaces with hyphens
+        role_filter = role_filter.lower().replace(" ", "-")
     except IndexError:
         print("❌ Missing role name after --role")
         sys.exit(1)
@@ -34,7 +36,7 @@ headers = {
 if not quiet:
     print(f"🔍 Fetching from: {url}")
     if role_filter:
-        print(f"🎯 Role filter: {role_filter}")
+        print(f"🎯 Role filter (slug): {role_filter}")
     print(f"🔑 Using token prefix: {TOKEN[:6]}... (truncated)")
 
 # --- Perform request ---
