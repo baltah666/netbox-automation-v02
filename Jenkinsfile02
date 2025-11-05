@@ -44,7 +44,7 @@ pipeline {
                             echo "NETBOX_TOKEN length: ${#NETBOX_TOKEN}" 1>&2
 
                             # print ONLY JSON
-                            python3 get_devices.py --quiet
+                            python3 get_devices.py --role "Access Switch"  --quiet
                         ''',
                         returnStdout: true
                     ).trim()
