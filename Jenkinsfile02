@@ -1,4 +1,3 @@
-  GNU nano 7.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  Jenkinsfile02
 pipeline {
     agent any
 
@@ -13,7 +12,7 @@ pipeline {
     environment {
         NETBOX_API   = 'http://netbox-docker-netbox-1:8080'   // no /api at the end!
         NETBOX_TOKEN = credentials('netbox-token')
-        GITHUB_TOKEN = credentials('github-cred-token')        // inject GitHub PAT
+        GITHUB_TOKEN = credentials('github-cred-token')        // GitHub Personal Access Token
     }
 
     stages {
@@ -38,6 +37,22 @@ pipeline {
             }
         }
 
+        // 🔎 Preflight check for NetBox API
+        stage('Validate NetBox Connection') {
+            steps {
+                sh '''
+                    . venv/bin/activate
+                    echo "🔗 Testing NetBox API connectivity..."
+                    STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$NETBOX_API/api/status/" || true)
+                    echo "NetBox API HTTP status: $STATUS_CODE"
+                    if [ "$STATUS_CODE" != "200" ]; then
+                        echo "❌ Unable to reach NetBox API ($NETBOX_API)"
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
         stage('Get Devices List') {
             steps {
                 script {
@@ -48,12 +63,10 @@ pipeline {
                             export NETBOX_API="$NETBOX_API"
                             export NETBOX_TOKEN="$NETBOX_TOKEN"
 
-                            # redirect debug to stderr so JSON stays clean
                             echo "NETBOX_API=$NETBOX_API" 1>&2
                             echo "NETBOX_TOKEN length: \${#NETBOX_TOKEN}" 1>&2
                             echo "Role: ${params.DEVICE_ROLE}" 1>&2
 
-                            # print ONLY JSON
                             python3 get_devices.py --role "${params.DEVICE_ROLE}" --quiet
                         """,
                         returnStdout: true
@@ -85,9 +98,9 @@ pipeline {
                                         sh """
                                             . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
                                             ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags device
                                         """
                                     },
@@ -95,54 +108,50 @@ pipeline {
                                         sh """
                                             . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"                                            
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
                                             ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
                                         """
                                     },
                                     "3. ip_addresses.json": {
                                         sh """
                                             . venv/bin/activate
-                                                       . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"                                            
-                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags ip_addresses
                                         """
                                     },
                                     "4. site.json": {
                                         sh """
                                             . venv/bin/activate
-                                            . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"                                            
-                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags site
                                         """
                                     },
                                     "5. vlans.json": {
                                         sh """
                                             . venv/bin/activate
-                                            . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"                                            
-                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags vlans
                                         """
                                     },
                                     "6. generate_config": {
                                         sh """
                                             . venv/bin/activate
-                                            . venv/bin/activate
                                             export NETBOX_API="$NETBOX_API"
-											export NETBOX_TOKEN="$NETBOX_TOKEN"
-											export ANSIBLE_NETBOX_URL="${NETBOX_API}"
-											export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"                                            
-                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags interfaces
+                                            export NETBOX_TOKEN="$NETBOX_TOKEN"
+                                            export ANSIBLE_NETBOX_URL="${NETBOX_API}"
+                                            export ANSIBLE_NETBOX_TOKEN="${NETBOX_TOKEN}"
+                                            ansible-playbook -i netbox_inv.yml generate_config.yml --limit ${deviceName} --tags generate_config
                                         """
                                     }
                                 )
@@ -164,8 +173,6 @@ pipeline {
                     if [ -n "$(git status --porcelain)" ]; then
                         git add .
                         git commit -m "Automated update for ${DEVICE_ROLE} devices from Jenkins build ${BUILD_NUMBER}"
-
-                        # Push using the injected GitHub token
                         git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
                     else
                         echo "No changes to commit."
@@ -187,6 +194,3 @@ pipeline {
         }
     }
 }
-
-
-
