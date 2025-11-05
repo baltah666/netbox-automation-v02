@@ -1,0 +1,103 @@
+pipeline {
+    agent any
+
+    environment {
+        // NetBox and GitHub environment variables
+        NETBOX_TOKEN = '1479d3740f85e8ab5900b72d31b89cb81fdc2a06'
+        NETBOX_API   = 'http://192.168.1.254:8000/api/'
+        GITHUB_TOKEN = credentials('github-cred-token')
+        VENV_DIR     = 'venv'
+    }
+
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                echo "📦 Checking out repository..."
+                git branch: 'main',
+                    url: 'https://github.com/baltah666/netbox-automation.git',
+                    credentialsId: 'github-cred'
+            }
+        }
+
+        stage('Setup Python Environment') {
+            steps {
+                echo "🐍 Creating and setting up Python venv..."
+                sh '''
+                if [ ! -d "$VENV_DIR" ]; then
+                    python3 -m venv $VENV_DIR
+                fi
+                . $VENV_DIR/bin/activate
+                pip install --upgrade pip
+                if [ -f requirements.txt ]; then
+                    pip install -r requirements.txt
+                else
+                    pip install ansible requests
+                fi
+                ansible-galaxy collection install netbox.netbox || true
+                '''
+            }
+        }
+
+        stage('Verify NetBox Connection') {
+            steps {
+                echo "🌐 Verifying connection to NetBox API..."
+                sh '''
+                . $VENV_DIR/bin/activate
+                echo "Testing API: $NETBOX_API"
+                curl -s -o /dev/null -w "HTTP Status: %{http_code}\\n" ${NETBOX_API}dcim/devices/ || true
+                '''
+            }
+        }
+
+        stage('Run Ansible Automation') {
+            steps {
+                echo "🚀 Running Ansible playbook to generate configs..."
+                sh '''
+                . $VENV_DIR/bin/activate
+                export NETBOX_API="http://netbox-docker-netbox-1:8080/"
+                export NETBOX_TOKEN="1479d3740f85e8ab5900b72d31b89cb81fdc2a06"
+                ansible-playbook -i netbox_inv.yml generate_config.yml
+                '''
+            }
+        }
+
+        stage('Archive Generated Configs') {
+            steps {
+                echo "📁 Archiving JSON configuration files..."
+                archiveArtifacts artifacts: 'configs/**/*.json', allowEmptyArchive: true
+            }
+        }
+
+        stage('Commit and Push Changes to GitHub') {
+            steps {
+                echo "🔄 Checking for configuration changes to push..."
+                sh '''
+                git config user.name "Abdulilah Baltah"
+                git config user.email "baltah666@gmail.com"
+
+                if [ -n "$(git status --porcelain)" ]; then
+                    echo "📝 Committing and pushing changes..."
+                    git add .
+                    git commit -m "Automated config update from Jenkins build ${BUILD_NUMBER}"
+                    git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation.git main
+                else
+                    echo "✅ No changes detected — nothing to commit."
+                fi
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully.'
+        }
+        failure {
+            echo '❌ Pipeline failed — check Jenkins console output for details.'
+        }
+        always {
+            echo '🧹 Cleaning up workspace...'
+            sh 'rm -rf $VENV_DIR/__pycache__ || true'
+        }
+    }
+}
