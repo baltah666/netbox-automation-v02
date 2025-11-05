@@ -10,7 +10,7 @@ pipeline {
     }
 
     environment {
-        NETBOX_API   = 'http://netbox-docker-netbox-1:8080/'   // no /api at the end!
+        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'   // no /api at the end!
         NETBOX_TOKEN = credentials('netbox-token')
         GITHUB_TOKEN = credentials('github-cred-token')        // inject GitHub PAT
     }
