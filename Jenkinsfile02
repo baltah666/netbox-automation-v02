@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'    // store your API URL if you want it secret (or hardcode)
+        NETBOX_API   = 'http://netbox-docker-netbox-1:8080/api'    // store your API URL if you want it secret (or hardcode)
         NETBOX_TOKEN = credentials('netbox-token')       // your NetBox API token
     }
 
