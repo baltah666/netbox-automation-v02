@@ -37,6 +37,8 @@ pipeline {
                             . venv/bin/activate
                             export NETBOX_API="$NETBOX_API"
                             export NETBOX_TOKEN="$NETBOX_TOKEN"
+			    echo "NETBOX_API=$NETBOX_API"
+                            echo "NETBOX_TOKEN length: ${#NETBOX_TOKEN}"
                             python3 get_devices.py --quiet
                         ''',
                         returnStdout: true
