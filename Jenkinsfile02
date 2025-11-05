@@ -1,10 +1,18 @@
 pipeline {
     agent any
 
+    parameters {
+        string(
+            name: 'DEVICE_ROLE',
+            defaultValue: 'Access Switch',
+            description: 'NetBox device role to target (e.g. Access Switch, Distribution, Core, Firewall, etc.)'
+        )
+    }
+
     environment {
-        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'
+        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'   // no /api at the end!
         NETBOX_TOKEN = credentials('netbox-token')
-        GITHUB_TOKEN = credentials('github-cred-token')   // inject GitHub PAT
+        GITHUB_TOKEN = credentials('github-cred-token')        // inject GitHub PAT
     }
 
     stages {
@@ -24,7 +32,7 @@ pipeline {
                     . venv/bin/activate
                     pip install --upgrade pip
                     pip install -r requirements.txt
-                    ansible-galaxy collection install netbox.netbox
+                    ansible-galaxy collection install netbox.netbox || true
                 '''
             }
         }
@@ -32,20 +40,21 @@ pipeline {
         stage('Get Devices List') {
             steps {
                 script {
-                    echo "🔍 Fetching device list from NetBox..."
+                    echo "🔍 Fetching device list from NetBox for role: ${params.DEVICE_ROLE}"
                     def devicesJSON = sh(
-                        script: '''
+                        script: """
                             . venv/bin/activate
                             export NETBOX_API="$NETBOX_API"
                             export NETBOX_TOKEN="$NETBOX_TOKEN"
 
                             # redirect debug to stderr so JSON stays clean
                             echo "NETBOX_API=$NETBOX_API" 1>&2
-                            echo "NETBOX_TOKEN length: ${#NETBOX_TOKEN}" 1>&2
+                            echo "NETBOX_TOKEN length: \${#NETBOX_TOKEN}" 1>&2
+                            echo "Role: ${params.DEVICE_ROLE}" 1>&2
 
                             # print ONLY JSON
-                            python3 get_devices.py --role "Access Switch"  --quiet
-                        ''',
+                            python3 get_devices.py --role "${params.DEVICE_ROLE}" --quiet
+                        """,
                         returnStdout: true
                     ).trim()
 
@@ -58,6 +67,9 @@ pipeline {
         }
 
         stage('Parallel Config Generation') {
+            when {
+                expression { return env.DEVICE_LIST?.trim() }
+            }
             steps {
                 script {
                     def devices = readJSON text: env.DEVICE_LIST
@@ -65,7 +77,6 @@ pipeline {
 
                     for (dev in devices) {
                         def deviceName = dev
-
                         branches[deviceName] = {
                             stage("${deviceName}") {
                                 parallel(
@@ -135,7 +146,7 @@ pipeline {
 
                     if [ -n "$(git status --porcelain)" ]; then
                         git add .
-                        git commit -m "Automated update from Jenkins build ${BUILD_NUMBER}"
+                        git commit -m "Automated update for ${DEVICE_ROLE} devices from Jenkins build ${BUILD_NUMBER}"
 
                         # Push using the injected GitHub token
                         git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
