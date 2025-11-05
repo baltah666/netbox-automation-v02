@@ -37,17 +37,19 @@ pipeline {
             }
         }
 
-        // 🔎 Preflight check for NetBox API
+        // 🔎 Validate that NetBox is reachable and token works
         stage('Validate NetBox Connection') {
             steps {
                 sh '''
                     . venv/bin/activate
                     echo "🔗 Testing NetBox API connectivity..."
-                    STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$NETBOX_API/api/status/" || true)
+                    STATUS_CODE=$(curl -s -H "Authorization: Token $NETBOX_TOKEN" -o /dev/null -w "%{http_code}" "$NETBOX_API/api/status/" || true)
                     echo "NetBox API HTTP status: $STATUS_CODE"
                     if [ "$STATUS_CODE" != "200" ]; then
-                        echo "❌ Unable to reach NetBox API ($NETBOX_API)"
+                        echo "❌ Unable to authenticate with NetBox API ($NETBOX_API)"
                         exit 1
+                    else
+                        echo "✅ NetBox API authentication successful!"
                     fi
                 '''
             }
