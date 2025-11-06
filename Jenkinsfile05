@@ -62,15 +62,19 @@ pipeline {
             steps {
                 script {
                     if (params.RUN_MODE == 'Single Device') {
+                        // 🧩 Single device mode
                         if (!params.DEVICE_NAME?.trim()) {
                             error("❌ DEVICE_NAME is required when using Single Device mode.")
                         }
                         echo "🎯 Running config generation for single device: ${params.DEVICE_NAME}"
+
                         build job: 'Generate-config-v05', parameters: [
-                            string(name: 'DEVICE_ROLE', value: ''), // not needed for single mode
+                            string(name: 'DEVICE_ROLE', value: ''), 
                             string(name: 'TARGET_DEVICE', value: params.DEVICE_NAME)
                         ]
+
                     } else {
+                        // 🧩 Role-based mode
                         def roles = [:]
 
                         if (params.RUN_ACCESS) {
@@ -79,12 +83,14 @@ pipeline {
                                     parameters: [string(name: 'DEVICE_ROLE', value: 'Access Switch')]
                             }
                         }
+
                         if (params.RUN_DISTRIBUTION) {
                             roles["Distribution Switches"] = {
                                 build job: 'Generate-config-v05',
                                     parameters: [string(name: 'DEVICE_ROLE', value: 'Distribution Switch')]
                             }
                         }
+
                         if (params.RUN_CORE) {
                             roles["Core Switches"] = {
                                 build job: 'Generate-config-v05',
