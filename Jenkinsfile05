@@ -1,0 +1,136 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'RUN_MODE', choices: ['Role-Based', 'Single Device'], description: 'Choose whether to generate configs for a full role or a single device.')
+        string(name: 'DEVICE_NAME', defaultValue: '', description: 'Enter the exact device name (e.g., Test-Env-Access_sw01) when using Single Device mode.')
+        booleanParam(name: 'RUN_ACCESS', defaultValue: true, description: 'Include Access Switch role when using Role-Based mode')
+        booleanParam(name: 'RUN_DISTRIBUTION', defaultValue: false, description: 'Include Distribution Switch role when using Role-Based mode')
+        booleanParam(name: 'RUN_CORE', defaultValue: false, description: 'Include Core Switch role when using Role-Based mode')
+    }
+
+    environment {
+        NETBOX_API   = 'http://netbox-docker-netbox-1:8080'
+        NETBOX_TOKEN = credentials('netbox-token')
+        GITHUB_TOKEN = credentials('github-cred-token')
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/baltah666/netbox-automation-v02.git',
+                    credentialsId: 'github-cred'
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install "ansible-core>=2.15,<2.17" ansible==8.5.0
+                    pip install -r requirements.txt
+                    ansible-galaxy collection install netbox.netbox || true
+                '''
+            }
+        }
+
+        stage('Validate NetBox Connection') {
+            steps {
+                withEnv(["NETBOX_API=${NETBOX_API}", "NETBOX_TOKEN=${NETBOX_TOKEN}"]) {
+                    sh '''
+                        . venv/bin/activate
+                        echo "🔗 Checking NetBox API connectivity..."
+                        STATUS_CODE=$(curl -s -H "Authorization: Token ${NETBOX_TOKEN}" \
+                            -o /dev/null -w "%{http_code}" "${NETBOX_API}/api/status/")
+                        
+                        if [ "$STATUS_CODE" = "200" ]; then
+                            echo "✅ NetBox API authentication successful!"
+                        else
+                            echo "❌ NetBox API connection failed (HTTP $STATUS_CODE)"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Run Config Generation') {
+            steps {
+                script {
+                    if (params.RUN_MODE == 'Single Device') {
+                        if (!params.DEVICE_NAME?.trim()) {
+                            error("❌ DEVICE_NAME is required when using Single Device mode.")
+                        }
+                        echo "🎯 Running config generation for single device: ${params.DEVICE_NAME}"
+                        build job: 'Generate-config-v05', parameters: [
+                            string(name: 'DEVICE_ROLE', value: ''), // not needed for single mode
+                            string(name: 'TARGET_DEVICE', value: params.DEVICE_NAME)
+                        ]
+                    } else {
+                        def roles = [:]
+
+                        if (params.RUN_ACCESS) {
+                            roles["Access Switches"] = {
+                                build job: 'Generate-config-v05',
+                                    parameters: [string(name: 'DEVICE_ROLE', value: 'Access Switch')]
+                            }
+                        }
+                        if (params.RUN_DISTRIBUTION) {
+                            roles["Distribution Switches"] = {
+                                build job: 'Generate-config-v05',
+                                    parameters: [string(name: 'DEVICE_ROLE', value: 'Distribution Switch')]
+                            }
+                        }
+                        if (params.RUN_CORE) {
+                            roles["Core Switches"] = {
+                                build job: 'Generate-config-v05',
+                                    parameters: [string(name: 'DEVICE_ROLE', value: 'Core Switch')]
+                            }
+                        }
+
+                        if (roles.isEmpty()) {
+                            echo "⚠️ No roles selected — nothing to process."
+                        } else {
+                            parallel roles
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Git Push Changes') {
+            steps {
+                withEnv(["GITHUB_TOKEN=${GITHUB_TOKEN}"]) {
+                    sh '''
+                        echo "📦 Preparing Git push..."
+                        git config user.name "Abdulilah Baltah"
+                        git config user.email "baltah666@gmail.com"
+
+                        git pull --rebase https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
+                        git add .
+                        git commit -m "🔄 Config update from Jenkins build ${BUILD_NUMBER} (${RUN_MODE})" || true
+                        git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
+
+                        echo "✅ Git push complete."
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Configuration generation completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed — check logs."
+        }
+        always {
+            echo "🧩 Jenkinsfile05 finished execution."
+        }
+    }
+}
