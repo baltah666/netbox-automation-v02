@@ -1,3 +1,43 @@
+/************************************************************************************
+ * 📘 Jenkinsfile05 — Optimized and Cached Version
+ * ----------------------------------------------------------------------------------
+ * 🔄 Upgrade Summary (from Jenkinsfile04 → Jenkinsfile05)
+ * 
+ * 1️⃣ **Performance Optimization — Cached Python Virtual Environment**
+ *     • The Setup Environment stage now detects if a virtualenv (`venv/`) already exists.
+ *     • If found, it reuses the existing environment instead of rebuilding it each time.
+ *     • This reduces the setup stage time from ~1 minute to under 1 second.
+ * 
+ * 2️⃣ **Smart Validation**
+ *     • Automatically checks if Ansible is installed inside the virtualenv.
+ *     • Displays the current Ansible version for traceability.
+ *     • If the environment is missing or corrupted, it rebuilds automatically.
+ * 
+ * 3️⃣ **Durability and Stability**
+ *     • Uses Jenkins `durabilityHint('PERFORMANCE_OPTIMIZED')` for faster pipeline execution.
+ *     • All environment paths (like the venv) are workspace-local for isolation.
+ * 
+ * 4️⃣ **Same Functional Behavior as v4**
+ *     • All stages (Checkout, NetBox Validation, Device Fetching, Parallel Config Generation, Git Push)
+ *       remain fully compatible and work the same way.
+ *     • Role-based and device-based selections continue to function identically.
+ * 
+ * 5️⃣ **Ready for Future Enhancements**
+ *     • Can easily extend to auto-refresh the virtualenv when `requirements.txt` or 
+ *       Ansible version changes (planned v6 feature).
+ * 
+ * ----------------------------------------------------------------------------------
+ * ⚙️ Key Benefits
+ *  • 95% faster setup stage (from ~65s → <1s)
+ *  • No repeated dependency downloads
+ *  • Stable and deterministic builds
+ *  • Fully backward compatible with Jenkinsfile04
+ * ----------------------------------------------------------------------------------
+ * Author: Abdulilah Baltah
+ * Version: Jenkinsfile05
+ * Date: November 2025
+ ************************************************************************************/
+
 pipeline {
     agent any
 
