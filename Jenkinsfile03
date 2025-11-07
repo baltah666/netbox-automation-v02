@@ -10,7 +10,7 @@ pipeline {
     }
 
     environment {
-        NETBOX_API   = 'http://172.18.0.6:8080:8080'
+        NETBOX_API   = 'http://172.18.0.6:8080'
         NETBOX_TOKEN = credentials('netbox-token')
         GITHUB_TOKEN = credentials('github-cred-token')
     }
