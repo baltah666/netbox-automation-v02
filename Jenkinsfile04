@@ -23,7 +23,7 @@ pipeline {
             type: 'PT_MULTI_SELECT',
             description: 'Select one or more specific devices (if SELECTION_TYPE=By Device)',
             multiSelectDelimiter: ',',
-            value: 'Test-Env-DS_sw01,Test-Env-DS_sw02,Home-Lab-Core-sw01,Home-Lab-Access-sw01'
+            value: 'Test-Env-DS_sw01,Test-Env-DS_sw02,test-env-access_sw01,test-env-access_sw02,Home-Lab-Core-sw01,Home-Lab-Access-sw01'
         )
     }
 
