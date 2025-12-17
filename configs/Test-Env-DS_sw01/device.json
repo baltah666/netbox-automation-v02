@@ -10,8 +10,8 @@
     "cookies": {},
     "cookies_string": "",
     "cross_origin_opener_policy": "same-origin",
-    "date": "Fri, 12 Dec 2025 12:46:33 GMT",
-    "elapsed": 8,
+    "date": "Wed, 17 Dec 2025 13:21:56 GMT",
+    "elapsed": 0,
     "failed": false,
     "json": {
         "count": 1,
@@ -220,5 +220,5 @@
     "vary": "HX-Request, Accept-Language, Cookie, origin",
     "x_content_type_options": "nosniff",
     "x_frame_options": "SAMEORIGIN",
-    "x_request_id": "e81e1188-e5b6-46b7-8328-de7c16f2ecda"
+    "x_request_id": "029051c1-44a6-443a-aeae-e1e8da0fdf3e"
 }
