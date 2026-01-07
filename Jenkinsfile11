@@ -1,0 +1,219 @@
+/************************************************************************************
+ * 📘 Jenkinsfile11 — Correct ansible-core Validation (FINAL)
+ * ----------------------------------------------------------------------------------
+ * ✔ Validates ansible-core (NOT ansible meta version)
+ * ✔ Version-aware virtualenv rebuild
+ * ✔ Fail-fast safety net
+ * ✔ Stable with NetBox + Ansible 8.x
+ ************************************************************************************/
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'SELECTION_TYPE',
+            choices: ['By Role', 'By Device'],
+            description: 'Select how to choose targets'
+        )
+
+        extendedChoice(
+            name: 'DEVICE_ROLES',
+            type: 'PT_MULTI_SELECT',
+            multiSelectDelimiter: ',',
+            value: 'Access Switch,Distribution,Core,Firewall,Server,Router'
+        )
+
+        extendedChoice(
+            name: 'DEVICES',
+            type: 'PT_MULTI_SELECT',
+            multiSelectDelimiter: ',',
+            value: 'Test-Env-DS_sw01,Test-Env-DS_sw02,test-env-access_sw01,test-env-access_sw02,Home-Lab-Core-sw01,Home-Lab-Access-sw01'
+        )
+    }
+
+    environment {
+        NETBOX_API   = 'http://192.168.1.254:8000'
+        NETBOX_TOKEN = credentials('netbox-token')
+        GITHUB_TOKEN = credentials('github-cred-token')
+        VENV_DIR     = "${env.WORKSPACE}/venv"
+    }
+
+    options {
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+    }
+
+    stages {
+
+        /* ------------------------- CHECKOUT ------------------------- */
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/baltah666/netbox-automation-v02.git',
+                    credentialsId: 'github-cred'
+            }
+        }
+
+        /* ------------------------- PYTHON ------------------------- */
+        stage('Install Python3 if Missing') {
+            steps {
+                sh '''
+                    set -e
+                    command -v python3 >/dev/null 2>&1 || \
+                      (apt-get update -y && apt-get install -y python3 python3-venv python3-pip)
+                '''
+            }
+        }
+
+        /* ------------------------- SETUP ENV (VERSION-AWARE) ------------------------- */
+        stage('Setup Environment') {
+            steps {
+                sh '''
+                    set -e
+                    REBUILD=0
+
+                    if [ ! -d "${VENV_DIR}/bin" ]; then
+                        echo "⚙️ No virtualenv found"
+                        REBUILD=1
+                    else
+                        . "${VENV_DIR}/bin/activate"
+
+                        python3 - <<'EOF' || REBUILD=1
+from packaging.version import Version
+import ansible.release
+
+core = Version(ansible.release.__version__)
+print(f"🔎 Detected ansible-core version: {core}")
+
+if core < Version("2.15.0"):
+    raise SystemExit(1)
+EOF
+                        [ "$REBUILD" -eq 1 ] && \
+                          echo "⚠️ ansible-core unsupported — rebuilding"
+                    fi
+
+                    if [ "$REBUILD" -eq 1 ]; then
+                        echo "🔄 Rebuilding Python environment"
+                        rm -rf "${VENV_DIR}"
+                        python3 -m venv "${VENV_DIR}"
+                        . "${VENV_DIR}/bin/activate"
+
+                        pip install --upgrade pip
+                        pip install "ansible-core>=2.15,<2.16" ansible==8.5.0
+                        pip install -r requirements.txt
+                        ansible-galaxy collection install netbox.netbox
+                    else
+                        echo "✅ Using cached virtualenv"
+                        ansible --version | head -1
+                    fi
+                '''
+            }
+        }
+
+        /* ------------------------- FAIL FAST ------------------------- */
+        stage('Validate Ansible Environment') {
+            steps {
+                sh '''
+                    set -e
+                    . "${VENV_DIR}/bin/activate"
+
+                    python3 - <<'EOF'
+from packaging.version import Version
+import ansible.release
+
+core = Version(ansible.release.__version__)
+print(f"✅ ansible-core version: {core}")
+
+if core < Version("2.15.0"):
+    raise SystemExit("❌ ansible-core too old")
+
+print("✅ Ansible environment validated")
+EOF
+
+                    ansible-inventory --version
+                '''
+            }
+        }
+
+        /* ------------------------- NETBOX ------------------------- */
+        stage('Validate NetBox Connection') {
+            steps {
+                sh '''
+                    set -e
+                    CODE=$(curl -s -H "Authorization: Token ${NETBOX_TOKEN}" \
+                         -o /dev/null -w "%{http_code}" "${NETBOX_API}/api/status/")
+                    [ "$CODE" = "200" ]
+                '''
+            }
+        }
+
+        /* ------------------------- TARGET SELECTION ------------------------- */
+        stage('Get Devices List') {
+            steps {
+                script {
+                    if (params.SELECTION_TYPE == 'By Role') {
+                        env.DEVICE_LIST = sh(
+                            script: """
+                                . "${VENV_DIR}/bin/activate"
+                                python3 get_devices.py --roles "${params.DEVICE_ROLES}" --quiet
+                            """,
+                            returnStdout: true
+                        ).trim()
+                    } else {
+                        env.DEVICE_LIST = groovy.json.JsonOutput.toJson(
+                            params.DEVICES.tokenize(',')
+                        )
+                    }
+                }
+            }
+        }
+
+        /* ------------------------- PARALLEL EXECUTION ------------------------- */
+        stage('Parallel Config Generation') {
+            when { expression { env.DEVICE_LIST?.trim() } }
+            steps {
+                script {
+                    def devices = readJSON text: env.DEVICE_LIST
+                    def jobs = [:]
+
+                    devices.each { dev ->
+                        jobs[dev] = {
+                            stage("Generate ${dev}") {
+                                sh """
+                                    . "${VENV_DIR}/bin/activate"
+                                    ansible-playbook -i netbox_inv.yml generate_config.yml \
+                                      --limit ${dev}
+                                """
+                            }
+                        }
+                    }
+                    parallel jobs
+                }
+            }
+        }
+
+        /* ------------------------- GIT PUSH ------------------------- */
+        stage('Git Push Changes') {
+            steps {
+                withEnv(["GITHUB_TOKEN=${GITHUB_TOKEN}"]) {
+                    sh '''
+                        git config user.name "Abdulilah Baltah"
+                        git config user.email "baltah666@gmail.com"
+
+                        if [ -n "$(git status --porcelain)" ]; then
+                            git add .
+                            git commit -m "Automated update for devices from Jenkins build ${BUILD_NUMBER}"
+                            git push https://${GITHUB_TOKEN}@github.com/baltah666/netbox-automation-v02.git main
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo "✅ All device configurations generated successfully!" }
+        failure { echo "❌ Pipeline failed — check logs." }
+        always  { echo "Pipeline finished." }
+    }
+}
