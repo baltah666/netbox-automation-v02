@@ -4,7 +4,7 @@ vars:
   netbox_url: "{{ lookup('env', 'NETBOX_API') }}"
   netbox_token: "{{ lookup('env', 'NETBOX_TOKEN') }}"
 
-validate_certs: False
+validate_certs: false
 
 group_by:
   - device_roles
@@ -12,10 +12,21 @@ group_by:
 
 compose:
   ansible_network_os: '"cisco.ios.ios"'
-  ansible_connection: '"network_cli"'
+
+  # IMPORTANT: force OpenSSH instead of libssh
+  ansible_connection: '"ansible.netcommon.network_cli"'
+  ansible_ssh_type: '"ssh"'
+
   ansible_user: '"admin"'
   ansible_password: '"cisco"'
+
   ansible_become: '"yes"'
   ansible_become_method: '"enable"'
   ansible_become_password: '"cisco"'
-  ansible_ssh_common_args: '"-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa -oStrictHostKeyChecking=no"'
+
+  # Legacy SSH crypto for old IOS
+  ansible_ssh_common_args: >-
+    "-oKexAlgorithms=+diffie-hellman-group14-sha1
+     -oHostKeyAlgorithms=+ssh-rsa
+     -oPubkeyAcceptedAlgorithms=+ssh-rsa
+     -oStrictHostKeyChecking=no"

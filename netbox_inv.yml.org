@@ -1,13 +1,15 @@
 plugin: netbox.netbox.nb_inventory
-api_endpoint: http://netbox-docker-netbox-1:8080
-token: 1479d3740f85e8ab5900b72d31b89cb81fdc2a06
+
+vars:
+  netbox_url: "{{ lookup('env', 'NETBOX_API') }}"
+  netbox_token: "{{ lookup('env', 'NETBOX_TOKEN') }}"
+
 validate_certs: False
 
 group_by:
   - device_roles
   - sites
 
-# Global connection defaults
 compose:
   ansible_network_os: '"cisco.ios.ios"'
   ansible_connection: '"network_cli"'
