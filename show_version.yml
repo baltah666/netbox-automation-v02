@@ -1,0 +1,15 @@
+---
+- name: Show version on Home-Lab switches
+  hosts: sites_home_lab:&device_roles_access 
+  gather_facts: no
+
+  tasks:
+    - name: Run show version
+      cisco.ios.ios_command:
+        commands:
+          - show version
+      register: version_output
+
+    - name: Print version
+      debug:
+        var: version_output.stdout_lines
