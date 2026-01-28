@@ -21,7 +21,7 @@ pipeline {
             name: 'DEVICE_ROLES',
             type: 'PT_MULTI_SELECT',
             multiSelectDelimiter: ',',
-            value: 'Access Switch,Distribution,Core,Firewall,Server,Router'
+            value: 'Access_Switch,Distribution,Core,Firewall,Server,Router'
         )
 
         extendedChoice(
