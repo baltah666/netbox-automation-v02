@@ -28,7 +28,7 @@ pipeline {
             name: 'DEVICES',
             type: 'PT_MULTI_SELECT',
             multiSelectDelimiter: ',',
-            value: 'Test-Env-DS_sw01,Test-Env-DS_sw02,test-env-access_sw01,test-env-access_sw02,Home-Lab-Core-sw01,Home-Lab-Access-sw01'
+            value: 'Test-Env-DS_sw01,Test-Env-DS_sw02,Test-Env-Access_sw01,Test-Env-Access_sw02,Home-Lab-Core-sw01,Home-Lab-Access-sw01'
         )
     }
 
